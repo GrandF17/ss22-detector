@@ -1,4 +1,5 @@
 # BigData libs:
+from io import StringIO
 import pandas as pd
 
 # ML:
@@ -146,7 +147,7 @@ class ShadowsocksDetector:
         errors['Predicted'] = y_pred
         errors = errors[errors['Actual'] != errors['Predicted']]
 
-        # saving false 'positive and' 'false negative' model
+        # saving 'false positive' and 'false negative' model
         # decisions made on test samples as csv file in root
         errors.to_csv("error_analysis.csv", index=False)
 
@@ -169,19 +170,6 @@ class ShadowsocksDetector:
         self.stop_socket_button.config(state=tk.DISABLED)
         messagebox.showinfo("Info", "Live connection stopped.")
 
-    # def listen_socket(self):
-    #     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    #     server_socket.bind(('0.0.0.0', 9999))
-    #     server_socket.listen(1)
-    #     while self.socket_running:
-    #         client_socket, addr = server_socket.accept()
-    #         data = client_socket.recv(1024).decode('utf-8')
-    #         client_socket.close()
-
-    #         # Process received data
-    #         if data:
-    #             self.process_live_data(data)
-    #     server_socket.close()
     def listen_socket(self):
         server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         server_socket.bind(('0.0.0.0', 9999))
@@ -193,7 +181,7 @@ class ShadowsocksDetector:
                 client_socket, addr = server_socket.accept()
                 print(f"New connection from {addr}")
 
-                # Обрабатываем клиента в отдельном потоке
+                # handling client in split threads
                 threading.Thread(
                     target=self.handle_client,
                     args=(client_socket,),
@@ -220,21 +208,24 @@ class ShadowsocksDetector:
 
     def process_live_data(self, data):
         try:
-            # Parse the data
-            input_data = np.array([float(x) for x in data.split(",")]).reshape(1, -1)
+            df = pd.read_csv(StringIO(data), sep=",")
+            # print(df)
+
+            # third line contains ip_src and ip_dst and we do not pass it to model
+            src_ip = df.iloc[1, 0]
+            df.drop(index=1, inplace=True)
+            # print(df)
 
             # Check if the number of metrics matches
-            if input_data.shape[1] != len(self.columns):
+            if df.shape[1] != len(self.columns):
                 self.result_label.config(text="Error: Mismatched metrics!")
                 return
             
-            # print("kek")
-            
             # Predict using the model
-            prediction = self.model.predict(input_data)[0]
-            probability = self.model.predict_proba(input_data)[0]
+            prediction = self.model.predict(df)[0]
+            probability = self.model.predict_proba(df)[0]
             result_text = f"Prediction: {prediction}, Probabilities: {probability}"
-            print(result_text)
+            print(src_ip, ": ", result_text)
             # self.result_label.config(text=result_text)
         except Exception as e:
             self.result_label.config(text=f"Error: {e}")
