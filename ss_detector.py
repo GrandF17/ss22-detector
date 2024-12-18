@@ -9,23 +9,30 @@ from sklearn.metrics import classification_report, confusion_matrix, accuracy_sc
 
 # AI Model:
 # from sklearn.ensemble import RandomForestClassifier
-from sklearn.tree import DecisionTreeClassifier, DecisionTreeRegressor
+from sklearn.tree import DecisionTreeClassifier
 
 # GUI:
 import tkinter as tk
 from tkinter import filedialog, messagebox
 
 # Other libs:
+from pathlib import Path
 import numpy as np
 import threading
 import socket
+
+# graphs
+from sklearn.tree import export_graphviz
+import graphviz
+
+models = ["Random Forest", "Decision Tree"]
 
 class ShadowsocksDetector:
     def __init__(self, root):
         self.root = root
         self.root.geometry("1000x700")
         self.root.title("Shadowsocks2022 Detector")
-        self.selected_model = tk.StringVar(value="Random Forest")
+        self.selected_model = tk.StringVar(value=models[0])
         self.result_label = tk.Label(root, text="Result: ")
 
         self.model = None
@@ -38,9 +45,15 @@ class ShadowsocksDetector:
 
         # switcher for model
         tk.Label(root, text="Select model:", font=("Arial", 14)).pack(pady=10)
-        tk.Radiobutton(root, text="Random Forest", variable=self.selected_model, value="Random Forest", font=("Arial", 12)).pack(anchor="w", padx=20)
-        tk.Radiobutton(root, text="Decision Tree", variable=self.selected_model, value="Decision Tree", font=("Arial", 12)).pack(anchor="w", padx=20)
-
+        for model in models:
+            tk.Radiobutton(
+                root, 
+                text=model, 
+                variable=self.selected_model, 
+                value=model, 
+                font=("Arial", 12)
+            ).pack(anchor="w", padx=20)
+        
         self.train_button = tk.Button(root, text="Train Model", command=self.train_model)
         self.start_socket_button = tk.Button(root, text="Start Live Connection", command=self.start_socket)
         self.stop_socket_button = tk.Button(root, text="Stop Live Connection", command=self.stop_socket, state=tk.DISABLED)
@@ -77,9 +90,9 @@ class ShadowsocksDetector:
 
         # ===================================
 
-        if self.selected_model.get() == "Random Forest":
+        if self.selected_model.get() == models[0]:
             self.model = RandomForestClassifier()
-        elif self.selected_model.get() == "Decision Tree":
+        elif self.selected_model.get() == models[1]:
             self.model = DecisionTreeClassifier()
         else:
             messagebox.showinfo("Error", "Select model!")
@@ -89,6 +102,7 @@ class ShadowsocksDetector:
         test_size=0.6
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_size, random_state=42)
         self.model.fit(X_train, y_train)
+
         # ===================================
 
         # Predictions and metrics
@@ -126,8 +140,8 @@ class ShadowsocksDetector:
         # of each metric on the model chosce
         self.save_errors(X_test, y_test, y_pred)
         self.save_decision_metrics()
+        self.visualize_tree()
 
-    
     def save_decision_metrics(self):
         if not self.model or not self.columns:
             print("Model is not trained or columns are not defined.")
@@ -227,6 +241,51 @@ class ShadowsocksDetector:
             result_text = f"Prediction: {prediction}, Probabilities: {probability}"
             print(src_ip, ": ", result_text)
             # self.result_label.config(text=result_text)
+        except Exception as e:
+            self.result_label.config(text=f"Error: {e}")
+
+    def visualize_tree(self):
+        try:
+            dynamic_path = Path(".") / "data"
+            dynamic_path.mkdir(parents=True, exist_ok=True)
+
+            # for Random Forest
+            if self.selected_model.get() == models[0]:
+                for i in range(3):
+                    individual_tree = self.model.estimators_[i]  # Get the first tree (you can choose any index)
+
+                    # Export the decision tree as a DOT file
+                    dot_data = export_graphviz(
+                        individual_tree, 
+                        out_file=None,
+                        feature_names=self.columns,
+                        class_names=[str(cls) for cls in self.data['is_ss22'].unique()],
+                        filled=True,
+                        rounded=True,
+                        special_characters=True
+                    )
+
+                    # Graphviz visualization
+                    graph = graphviz.Source(dot_data)
+                    graph.render(dynamic_path / f"random_forest_{i}")
+                    graph.view()
+            
+            # for Decision Tree
+            if self.selected_model.get() == models[1]:
+                dot_data = export_graphviz(
+                    self.model,
+                    out_file=None,
+                    feature_names=self.columns,
+                    class_names=[str(cls) for cls in self.data['is_ss22'].unique()],
+                    filled=True,
+                    rounded=True,
+                    special_characters=True
+                )
+
+                # Graphviz visualization
+                graph = graphviz.Source(dot_data)
+                graph.render(dynamic_path / "decision_tree")
+                graph.view()
         except Exception as e:
             self.result_label.config(text=f"Error: {e}")
 
