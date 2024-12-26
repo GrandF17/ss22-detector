@@ -223,12 +223,10 @@ class ShadowsocksDetector:
     def process_live_data(self, data):
         try:
             df = pd.read_csv(StringIO(data), sep=",")
-            # print(df)
 
             # third line contains ip_src and ip_dst and we do not pass it to model
-            src_ip = df.iloc[1, 0]
+            [ip, port] = [df.iloc[1, 0], df.iloc[1, 1]]
             df.drop(index=1, inplace=True)
-            # print(df)
 
             # Check if the number of metrics matches
             if df.shape[1] != len(self.columns):
@@ -238,8 +236,7 @@ class ShadowsocksDetector:
             # Predict using the model
             prediction = self.model.predict(df)[0]
             probability = self.model.predict_proba(df)[0]
-            result_text = f"Prediction: {prediction}, Probabilities: {probability}"
-            print(src_ip, ": ", result_text)
+            print(f"{ip}:{port} {probability} is ", "ShadowSocks22" if prediction == 1 else 'legitimate traffic')
             # self.result_label.config(text=result_text)
         except Exception as e:
             self.result_label.config(text=f"Error: {e}")
